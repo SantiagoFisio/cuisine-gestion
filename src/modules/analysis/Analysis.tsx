@@ -1,6 +1,6 @@
 import { useCuisine } from '../../context/CuisineContext';
 import { useState } from 'react';
-import { Users, Coins, TrendingUp } from 'lucide-react';
+import { Users, Coins, TrendingUp, Package } from 'lucide-react';
 import { DEFAULT_STRUCTURE } from '../../types';
 
 export function Analysis() {
@@ -8,7 +8,30 @@ export function Analysis() {
     const days = DEFAULT_STRUCTURE.days;
     const [analysisMode, setAnalysisMode] = useState<'MENU' | 'PURCHASES'>('MENU');
 
-    // Calculate Costs per Day
+    // --- STOCK & INVENTORY CALCULATIONS ---
+    const calculateInventory = () => {
+        // A. Total Inputs (Achats / Scans)
+        const stockInputs: Record<string, { qty: number, cost: number, unit: string }> = {};
+
+        ingredients.forEach(ing => {
+            const name = ing.name.toLowerCase();
+            if (!stockInputs[name]) {
+                stockInputs[name] = { qty: 0, cost: 0, unit: ing.unit };
+            }
+            stockInputs[name].qty += ing.quantity;
+            stockInputs[name].cost += ing.price;
+        });
+
+        // B. Total Outputs (Consommation via Menus)
+        // Currently limited to specific implementation logic, keeping it simple for now as per user request
+        // to just show "Stock" cells.
+
+        return { stockInputs };
+    };
+
+    const { stockInputs } = calculateInventory();
+
+    // --- DAILY MENU ANALYSIS ---
     const dailyAnalysis = days.map(day => {
         const dayItems = Object.values(menuItems).filter(item => item.day === day);
 
@@ -23,20 +46,15 @@ export function Analysis() {
     });
 
     // --- BIO & EGALIM Calculation ---
-    // Helper to calculate stats from a list of items (either menu components or raw ingredients)
     const calculateStats = (items: { isBio: boolean; isEgalim: boolean; cost: number }[]) => {
         const totalCost = items.reduce((sum, c) => sum + c.cost, 0);
         const bioCost = items.filter(c => c.isBio).reduce((sum, c) => sum + c.cost, 0);
-        // User formula: EGALIM includes BIO + EGALIM
-        // If an item is BOTH (unlikely but possible), filter logic handles it. 
-        // Assuming 'isEgalim' tag is for "Egalim (Non-Bio)". If 'isEgalim' implies "Compliant" generic, we need to be careful.
-        // Usually: Bio IS Egalim. So Cost(Bio) + Cost(OtherEgalim).
         const egalimOnlyCost = items.filter(c => c.isEgalim && !c.isBio).reduce((sum, c) => sum + c.cost, 0);
         const totalEgalimCost = bioCost + egalimOnlyCost;
 
         const bioPct = totalCost > 0 ? (bioCost / totalCost) * 100 : 0;
         const egalimPct = totalCost > 0 ? (totalEgalimCost / totalCost) * 100 : 0;
-        const nonBioPct = 100 - bioPct; // User formula: Total - Bio
+        const nonBioPct = 100 - bioPct;
 
         return { totalCost, bioPct, egalimPct, nonBioPct };
     };
@@ -54,7 +72,7 @@ export function Analysis() {
 
     // 2. Purchases Mode Data
     const purchaseComponents = ingredients.map(ing => ({
-        cost: ing.price, // Total price of the scanned item
+        cost: ing.price,
         isBio: ing.isBio || false,
         isEgalim: ing.isEgalim || false
     }));
@@ -82,7 +100,7 @@ export function Analysis() {
                             onClick={() => setAnalysisMode('PURCHASES')}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${analysisMode === 'PURCHASES' ? 'bg-white dark:bg-dark-card shadow text-blue-600' : 'text-gray-500'}`}
                         >
-                            Analyse Achats
+                            Achats/Stock
                         </button>
                     </div>
 
@@ -148,8 +166,59 @@ export function Analysis() {
                 </div>
             </div>
 
+            {/* NEW STOCK VIEW */}
+            {analysisMode === 'PURCHASES' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* 1. Global Stock Value (La "Caisse") */}
+                    <div className="bg-white dark:bg-dark-card p-6 rounded-xl border border-gray-200 dark:border-dark-border shadow-sm flex flex-col items-center justify-center gap-2">
+                        <div className="p-3 bg-yellow-50 text-yellow-600 rounded-full mb-2">
+                            <Coins size={32} />
+                        </div>
+                        <h3 className="text-gray-500 text-sm uppercase font-semibold">Valeur Totale du Stock</h3>
+                        <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                            {activeStats.totalCost.toFixed(2)}€
+                        </span>
+                        <span className="text-xs text-gray-400">Somme de tous les scans/entrées</span>
+                    </div>
+
+                    {/* 2. Stock Inventory Table */}
+                    <div className="bg-white dark:bg-dark-card rounded-xl border border-gray-200 dark:border-dark-border shadow-sm overflow-hidden flex flex-col">
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <Package size={18} className="text-gray-500" />
+                                État du Stock (Ingrédients)
+                            </h3>
+                        </div>
+                        <div className="overflow-y-auto max-h-[300px]">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-800">
+                                    <tr>
+                                        <th className="px-4 py-2">Ingrédient</th>
+                                        <th className="px-4 py-2 text-right">Qté Totale</th>
+                                        <th className="px-4 py-2 text-right">Valeur</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                    {Object.entries(stockInputs).map(([name, data]) => (
+                                        <tr key={name} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                            <td className="px-4 py-2 font-medium capitalize">{name}</td>
+                                            <td className="px-4 py-2 text-right">
+                                                {data.qty.toFixed(2)} <span className="text-xs text-gray-400">{data.unit}</span>
+                                            </td>
+                                            <td className="px-4 py-2 text-right font-mono">
+                                                {data.cost.toFixed(2)}€
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Daily Dashboard - Only Show in Menu Mode */}
-            {analysisMode === 'MENU' ? (
+            {analysisMode === 'MENU' && (
                 <>
                     <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2 mt-2">
                         <TrendingUp size={20} className="text-green-500" />
@@ -189,11 +258,6 @@ export function Analysis() {
                         ))}
                     </div>
                 </>
-            ) : (
-                <div className="flex-1 bg-gray-50 dark:bg-gray-800/20 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center text-gray-400">
-                    <TrendingUp size={48} className="mb-4 text-gray-300 dark:text-gray-600" />
-                    <p>L'analyse des achats se base sur l'ensemble du stock scanné ou saisi.</p>
-                </div>
             )}
 
             {/* Hint */}

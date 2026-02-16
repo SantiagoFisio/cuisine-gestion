@@ -51,10 +51,12 @@ export function CuisineProvider({ children }: { children: React.ReactNode }) {
         const savedMemory = localStorage.getItem('cuisine_memory');
         const savedRecipes = localStorage.getItem('cuisine_recipes');
         const savedWeeklyMenus = localStorage.getItem('cuisine_weekly_menus');
+        const savedIngredients = localStorage.getItem('cuisine_ingredients'); // Load ingredients
         const oldFlatMenu = localStorage.getItem('cuisine_menu_items'); // Legacy support
 
         if (savedMemory) setItemMemory(JSON.parse(savedMemory));
         if (savedRecipes) setRecipes(JSON.parse(savedRecipes));
+        if (savedIngredients) setIngredients(JSON.parse(savedIngredients)); // Set ingredients
 
         if (savedWeeklyMenus) {
             setWeeklyMenus(JSON.parse(savedWeeklyMenus));
@@ -63,7 +65,12 @@ export function CuisineProvider({ children }: { children: React.ReactNode }) {
             const currentMonday = getMonday(new Date());
             setWeeklyMenus({ [currentMonday]: JSON.parse(oldFlatMenu) });
         }
-    }, []);
+    }, [setItemMemory, setRecipes, setIngredients, setWeeklyMenus]); // Added dependencies
+
+    // Save ingredients on change
+    useEffect(() => {
+        localStorage.setItem('cuisine_ingredients', JSON.stringify(ingredients));
+    }, [ingredients]);
 
     // Save recipes on change
     useEffect(() => {
